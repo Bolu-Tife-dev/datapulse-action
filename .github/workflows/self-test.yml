@@ -1,0 +1,41 @@
+name: self-test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create a sample PDF
+        run: |
+          pip install fpdf2 --quiet
+          python -c "
+          from fpdf import FPDF
+          pdf = FPDF()
+          pdf.add_page()
+          pdf.set_font('Helvetica', size=16)
+          pdf.cell(text='DataPulse Action Self-Test')
+          pdf.set_font('Helvetica', size=11)
+          pdf.ln(10)
+          pdf.cell(text='If you can read this, the GitHub Action converted me.')
+          pdf.ln(10)
+          pdf.cell(text='Item one of a list should become Markdown.')
+          pdf.output('sample.pdf')
+          "
+
+      - name: Convert via DataPulse
+        uses: ./
+        with:
+          api-key: ${{ secrets.DPULSE_API_KEY }}
+          files: "sample.pdf"
+          output-dir: out
+
+      - name: Show result
+        run: |
+          cat out/sample.md
+          test -s out/sample.md

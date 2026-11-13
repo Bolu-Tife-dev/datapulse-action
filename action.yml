@@ -1,0 +1,58 @@
+name: 'DataPulse PDF to Markdown'
+description: 'Convert PDFs to clean, structured Markdown with DataPulse. Pay-per-job billing to your DataPulse wallet — no server needed.'
+branding:
+  icon: 'file-text'
+  color: 'cyan'
+inputs:
+  api-key:
+    description: 'DataPulse API key (dpk.*). Generate one for free at https://datapulse-hazel.vercel.app — new accounts start with $2.00 credit.'
+    required: true
+  files:
+    description: 'Space-separated list of PDF file paths (shell globs are expanded).'
+    required: true
+  output-dir:
+    description: 'Directory where converted .md files are written.'
+    default: 'markdown'
+    required: false
+runs:
+  using: 'composite'
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "${{ inputs.output-dir }}"
+        converted=0
+        failed=0
+        for f in ${{ inputs.files }}; do
+          [ -f "$f" ] || { echo "::warning::No such file: $f"; failed=$((failed+1)); continue; }
+          base=$(basename "$f")
+          base="${base%.[pP][dD][fF]}"
+          echo "Converting $f ..."
+          body=$(mktemp)
+          hdrs=$(mktemp)
+          code=$(curl -sS --max-time 300 \
+            -X POST "https://datapulse-hazel.vercel.app/api/tools/pdf-markdown/run" \
+            -H "Authorization: Bearer ${{ inputs.api-key }}" \
+            -H "User-Agent: datapulse-action/1.0 (GitHub Actions)" \
+            -D "$hdrs" \
+            -o "$body" \
+            -w '%{http_code}' \
+            -F "pdf=@${f}" || echo "000")
+          if [ "$code" != "200" ]; then
+            echo "::error::DataPulse conversion failed for $f (HTTP $code)"
+            cat "$body" >&2 || true
+            rm -f "$body" "$hdrs"
+            failed=$((failed+1))
+            continue
+          fi
+          [ -s "$body" ] || { echo "::error::Empty response for $f"; rm -f "$body" "$hdrs"; failed=$((failed+1)); continue; }
+          mv "$body" "${{ inputs.output-dir }}/${base}.md"
+          pages=$(grep -i '^x-pages-processed:' "$hdrs" | tr -dc '0-9' || true)
+          left=$(grep -i '^x-remaining-balance:' "$hdrs" | sed 's/[^0-9.]//g' || true)
+          echo "  -> ${{ inputs.output-dir }}/${base}.md (${pages:-?} pages, wallet balance left: \$${left:-?})"
+          rm -f "$hdrs"
+          converted=$((converted+1))
+        done
+        echo "converted=${converted}" >> "$GITHUB_OUTPUT"
+        echo "failed=${failed}" >> "$GITHUB_OUTPUT"
+        [ "$failed" -eq 0 ] || exit 1
