@@ -1,5 +1,7 @@
 # datapulse-action
 
+[![self-test](https://github.com/Bolu-Tife-dev/datapulse-action/actions/workflows/self-test.yml/badge.svg)](https://github.com/Bolu-Tife-dev/datapulse-action/actions/workflows/self-test.yml)
+
 Convert PDFs to clean, structured **Markdown** inside GitHub Actions — powered by
 [DataPulse](https://datapulse-hazel.vercel.app), the pay-per-job bulk engine.
 
